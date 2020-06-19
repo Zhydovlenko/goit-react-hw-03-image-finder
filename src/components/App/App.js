@@ -4,8 +4,10 @@ import Searchbar from '../Searchbar/Searchbar';
 import ImageGallery from '../ImageGallery/ImageGallery';
 import Loader from '../Loader/Loader';
 import Notification from '../Notification/Notification';
+import Button from '../Button/Button';
 
-import imagesApi from '../../services/imagesApi';
+import fetchImagesWithQuery from '../../services/imagesApi';
+import scroll from '../../services/scroll';
 
 import styles from './App.module.css';
 
@@ -13,68 +15,62 @@ export default class App extends Component {
   state = {
     images: [],
     loading: false,
-    error: null,
+    error: false,
     searchQuery: '',
     page: 1,
   };
 
-  componentDidUpdate(prevProps, prevState) {
-    const prevQuery = prevState.searchQuery;
-    const nextQuery = this.state.searchQuery;
-
-    if (prevQuery !== nextQuery) {
-      this.fetchImages();
-    }
-
-    if (prevState.images.length > 12) {
-      window.scrollTo({
-        top: window.scrollY + window.innerHeight,
-        // top: document.documentElement.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
-  }
-
-  fetchImages = () => {
-    const { searchQuery, page } = this.state;
+  fetchImages = (searchQuery, page) => {
     this.setState({ loading: true });
-    imagesApi
-      .fetchImagesWithQuery(searchQuery, page)
-      .then(images =>
-        this.setState(state => ({
-          images: [...state.images, ...images],
-          page: state.page + 1,
-        })),
-      )
+
+    fetchImagesWithQuery(searchQuery, page)
+      .then(images => {
+        if (page > 1) {
+          this.setState({
+            images: [...this.state.images, ...images],
+            searchQuery: searchQuery,
+          });
+        } else {
+          this.setState({
+            images: images,
+            searchQuery: searchQuery,
+          });
+        }
+      })
       .catch(error => this.setState({ error }))
       .finally(() => this.setState({ loading: false }));
   };
 
-  handleSearchFormSubmit = query => {
+  handleLoadMore = () => {
+    const newPage = this.state.page + 1;
+
+    this.fetchImages(this.state.searchQuery, newPage);
+
     this.setState({
-      searchQuery: query,
-      page: 1,
-      images: [],
+      page: newPage,
     });
   };
+
+  componentDidUpdate() {
+    scroll();
+  }
 
   render() {
     const { images, loading, error } = this.state;
 
     return (
       <div className={styles.App}>
-        <Searchbar onSubmit={this.handleSearchFormSubmit} />
+        <Searchbar onSubmit={this.fetchImages} />
 
         {error && <Notification message="No results!" />}
 
-        {images.length > 0 && <ImageGallery images={images} />}
-        {loading && <Loader />}
-
-        {images.length > 0 && !loading && (
-          <button type="button" onClick={this.fetchImages}>
-            Load more
-          </button>
+        {!!images.length && !error && (
+          <>
+            <ImageGallery images={images} />
+            {!loading && <Button onClick={this.handleLoadMore} />}
+          </>
         )}
+        {loading && <Loader />}
       </div>
     );
   }
